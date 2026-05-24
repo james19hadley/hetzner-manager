@@ -1,0 +1,18 @@
+{
+  "name": "☁️ System — Hetzner Server Manager",
+  "type": "LEARN",
+  "category": "Product",
+  "status": "Active",
+  "credit_points": 0,
+  "exam_date": "no exam",
+  "moodle_url": "https://moodle.tu-darmstadt.de/course/view.php?id=...",
+  "repo_url": "git@github.com:username/repo.git",
+  "ai_chat": "",
+  "progress_text": "Successfully installed Netdata on Hetzner VPS, secured it via Tailscale, optimized RAM footprint to 103MB, and deployed SMTP/Telegram alert templates.",
+  "next_action": "Help user verify email/Telegram notifications after they populate /etc/msmtprc and health_alarm_notify.conf.",
+  "next_deadline": "2026-06-01",
+  "next_deadline_description": "First deliverable",
+  "sync_needed": true,
+  "last_synchronized": "1970-01-01T00:00:00Z",
+  "sync_to_sheets": false
+}
