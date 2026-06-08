@@ -47,8 +47,14 @@ password         $GMAIL_PASSWORD
 account default : gmail
 EOF
 
-chmod 600 /etc/msmtprc
-chown root:root /etc/msmtprc
+if getent group msmtp >/dev/null; then
+    usermod -aG msmtp netdata || true
+    chown root:msmtp /etc/msmtprc
+    chmod 640 /etc/msmtprc
+else
+    chown root:root /etc/msmtprc
+    chmod 600 /etc/msmtprc
+fi
 touch /var/log/msmtp.log
 chmod 666 /var/log/msmtp.log
 

@@ -39,7 +39,7 @@ This file tracks overall goals, milestones, and task checklists for the project.
 - [x] **Task 1.5**: Secure Netdata dashboard via Tailscale.
 
 ### Phase 2: Core execution
-- [/] **Task 2.1**: Configure Netdata email alerts using SMTP (Gmail/Brevo) - Templates deployed.
+- [x] **Task 2.1**: Configure Netdata email alerts using SMTP (Gmail/Brevo) - Verified and working.
 - [x] **Task 2.2**: Optimize Netdata for low memory usage (minimal footprint).
 - [ ] **Task 2.3**: Test alerts by simulating high CPU load.
 - [x] **Task 2.4**: Setup skeleton configuration for the future Blog website in Caddy.
