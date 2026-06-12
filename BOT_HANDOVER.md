@@ -32,12 +32,20 @@
 3.  Запушь изменения в git (`git push origin main`).
 
 ### Доступные команды в боте
+*   `/start` или `/help` — приветствие и список всех доступных команд.
 *   `/status` или `/sysinfo` — метрики CPU, RAM, диска, Uptime и Load Average.
 *   `/services` или `/daemons` — опрос системных служб `ag2r`, `antigravity-gui`, `xvfb` и `hetzner-bot`.
-*   `/containers` или `/docker` — список запущенных Docker-контейнеров на сервере.
+*   `/containers` or `/docker` — список запущенных Docker-контейнеров на сервере.
 *   `/restart_daemon <name>` — безопасный перезапуск разрешенных служб (через настроенный sudoers).
 *   `/restart_container <name>` — перезапуск Docker-контейнера.
 *   `$ <команда>` — выполнение произвольной консольной команды на хосте VPS (доступно только для верифицированных в БД Telegram ID).
+
+#### 🤖 Управление и Мониторинг Antigravity
+*   `/agy_status` — детальный опрос состояния служб (`xvfb`, `antigravity-gui`, `ag2r`), опрос CDP контекстов на порту `9000`, снятие скриншота виртуального дисплея `:99` через `scrot` и отправка снимка в Telegram.
+*   `/agy_restart` — перезапуск службы `antigravity-gui.service` через sudo.
+*   `/agy_sleep` — перевод Antigravity в режим сна (остановка `antigravity-gui.service`).
+*   `/agy_wakeup` — пробуждение Antigravity (запуск `antigravity-gui.service`).
+*   `/agy_logs` — получение последних 15 строк логов `journalctl` для `antigravity-gui.service` и `ag2r.service`.
 
 ---
 

@@ -129,6 +129,7 @@ async def get_system_info() -> dict:
         }
 
 @router.message(CommandStart())
+@router.message(Command("help"))
 async def cmd_start(message: Message, db_user: dict):
     welcome_text = (
         f"👋 Привет, {db_user['name']}!\n\n"
