@@ -145,7 +145,8 @@ async def cmd_start(message: Message, db_user: dict):
         f"• `/agy_wakeup` — Запуск Antigravity GUI (пробуждение)\n"
         f"• `/agy_logs` — Последние логи Antigravity GUI и AG2R\n"
         f"• `/agy_login` — Инициировать авторизацию Google в Antigravity\n"
-        f"• `/agy_callback <url>` — Завершить вход отправкой callback-ссылки\n\n"
+        f"• `/agy_callback <url>` — Завершить вход отправкой callback-ссылки\n"
+        f"• `/agy_link` — Получить ссылку для быстрого входа в панель AG2R\n\n"
         f"⚙️ *Управление службами*:\n"
         f"• `/restart_daemon <имя>` — Безопасный перезапуск службы\n"
         f"• `/restart_container <имя>` — Перезапуск Docker-контейнера\n\n"
@@ -599,15 +600,24 @@ async def cmd_sh_exit(message: Message):
 # --- AG2R Integration Helpers & Handlers ---
 import ssl
 
-def get_ag2r_password() -> str:
+def get_ag2r_env_val(key: str, default: str = "") -> str:
     try:
         with open("/opt/ag2r/.env", "r") as f:
             for line in f:
-                if line.startswith("APP_PASSWORD="):
+                if line.startswith(f"{key}="):
                     return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
     except Exception:
         pass
-    return "antigravity"
+    return default
+
+def get_ag2r_password() -> str:
+    return get_ag2r_env_val("APP_PASSWORD", "antigravity")
+
+def get_ag2r_port() -> str:
+    return get_ag2r_env_val("PORT", "3000")
+
+def get_ag2r_tunnel_url() -> str:
+    return get_ag2r_env_val("TUNNEL_URL", "")
 
 async def ag2r_login_and_get_cookie() -> str:
     password = get_ag2r_password()
@@ -661,7 +671,7 @@ async def ag2r_post_authenticated(endpoint: str, payload: dict) -> dict:
             
     return await asyncio.to_thread(_fetch)
 
-@router.message(Command("agy_login"))
+@router.message(Command("agy_login", "login"))
 async def cmd_agy_login(message: Message):
     status_msg = await message.answer("🔑 Инициализирую вход Google в Antigravity...")
     try:
@@ -674,12 +684,16 @@ async def cmd_agy_login(message: Message):
                     f"[Войти в Google Account]({google_url})\n\n"
                     f"1. Перейдите по ссылке и войдите в аккаунт.\n"
                     f"2. После успешного входа страница перенаправит вас на нерабочий адрес `http://localhost:X/...`.\n"
-                    f"3. Скопируйте эту итоговую localhost-ссылку и отправьте её боту (или используйте `/agy_callback <ссылка>`).",
+                    f"3. Скопируйте эту итоговую localhost-ссылку и отправьте её боту (или используйте `/agy_callback <ссылка>`).\n\n"
+                    f"💡 Чтобы получить ссылку для входа в панель управления AG2R на телефоне, используйте `/agy_link`.",
                     parse_mode="Markdown",
                     disable_web_page_preview=True
                 )
             else:
-                await status_msg.edit_text("✅ Antigravity уже авторизован в системе!")
+                await status_msg.edit_text(
+                    "✅ Antigravity уже авторизован в системе!\n\n"
+                    "💡 Чтобы получить ссылку для входа в панель управления AG2R на телефоне, используйте `/agy_link`."
+                )
         else:
             await status_msg.edit_text(f"❌ Не удалось получить ссылку: `{res.get('reason', 'unknown error')}`")
     except Exception as e:
@@ -702,3 +716,42 @@ async def cmd_agy_callback(message: Message):
             await status_msg.edit_text(f"❌ Ошибка обработки ссылки: `{res.get('error', 'unknown error')}`")
     except Exception as e:
         await status_msg.edit_text(f"❌ Ошибка вызова API Antigravity:\n`{str(e)}`")
+
+@router.message(Command("agy_link", "link", "get_link"))
+async def cmd_agy_link(message: Message):
+    status_msg = await message.answer("🔍 Генерация ссылки доступа к Antigravity...")
+    try:
+        password = get_ag2r_password()
+        port = get_ag2r_port()
+        tunnel_url = get_ag2r_tunnel_url()
+        
+        # Get Tailscale IP
+        tailscale_ip = await run_shell("tailscale ip -4")
+        if "Error" in tailscale_ip or "Exception" in tailscale_ip or not tailscale_ip.strip():
+            tailscale_ip = None
+            
+        links = []
+        if tailscale_ip:
+            ts_link = f"https://{tailscale_ip}:{port}/?key={password}"
+            links.append(f"🔌 *Через Tailscale VPN*:\n[{ts_link}]({ts_link})")
+            
+        if tunnel_url:
+            clean_url = tunnel_url.rstrip("/")
+            tun_link = f"{clean_url}/?key={password}"
+            links.append(f"🌐 *Через публичный туннель*:\n[{tun_link}]({tun_link})")
+            
+        if not links:
+            await status_msg.edit_text(
+                "❌ Не удалось определить Tailscale IP или настроить туннель.\n"
+                f"Вы можете попробовать зайти локально: `https://localhost:{port}/?key={password}`"
+            )
+            return
+            
+        welcome_text = (
+            "🔗 *Ссылки для быстрого входа в AG2R (Antigravity Dashboard)*:\n\n" +
+            "\n\n".join(links) +
+            "\n\nℹ️ _При переходе по ссылке авторизация произойдет автоматически._"
+        )
+        await status_msg.edit_text(welcome_text, parse_mode="Markdown", disable_web_page_preview=True)
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Ошибка генерации ссылки:\n`{str(e)}`")

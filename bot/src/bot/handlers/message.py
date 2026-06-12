@@ -123,6 +123,12 @@ async def handle_text_message(message: Message, db_user: dict):
     if text.startswith("/"):
         return
         
+    # Intercept plain text login shortcuts
+    if text.lower() in ["login", "логин"]:
+        from src.bot.handlers.base import cmd_agy_login
+        await cmd_agy_login(message)
+        return
+        
     # Intercept Google Auth callback URL (starts with http://localhost or http://127.0.0.1 and contains auth/callback)
     if ("localhost:" in text or "127.0.0.1:" in text) and "auth/callback" in text:
         status_msg = await message.reply("⚙️ Обнаружена ссылка авторизации. Передаю в Antigravity...")
