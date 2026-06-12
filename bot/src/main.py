@@ -7,6 +7,7 @@ from aiogram.types import BotCommand, BotCommandScopeDefault
 from src.database.db import Database
 from src.bot.middleware.auth import AuthMiddleware
 from src.bot.handlers import router
+from src.bot.alerts import monitor_alerts
 
 # Load environment variables
 load_dotenv()
@@ -73,9 +74,16 @@ async def main():
     dp["db"] = db
 
     logger.info("Bot starting...")
+    alerts_task = asyncio.create_task(monitor_alerts(bot, db))
     try:
+        await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
+        alerts_task.cancel()
+        try:
+            await alerts_task
+        except asyncio.CancelledError:
+            pass
         await bot.session.close()
         logger.info("Bot shut down.")
 

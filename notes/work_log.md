@@ -34,3 +34,14 @@ This file acts as a chronological developer journal and laboratory notebook. Rec
 1. **Discovered Permission Bug**: The Netdata test alert command failed with code `78` (`sendmail: account default not found`) because `/etc/msmtprc` was configured with owner `root:root` and permission `600`, preventing the `netdata` system user from reading it.
 2. **Applied Fix**: Updated `/etc/msmtprc` to be owned by `root:msmtp` with permission `640` and added the `netdata` user to the `msmtp` system group. Also modified `scripts/setup_alerts.sh` to enforce this behavior automatically in the future.
 3. **Successfully Verified Alerts**: Re-ran the Netdata alert-notify test command and verified that Warning, Critical, and Clear test alerts were successfully sent to `ivan.zharov.de@gmail.com`.
+
+---
+
+## 2026-06-12: Integrated Netdata API and Added Real-Time Telegram Alerting
+**Author**: Agent
+
+### Progress Summary
+1. **Stabilized Bot Startup**: Added `delete_webhook(drop_pending_updates=True)` to [main.py](file:///home/ging/prog/hetzner-manager/bot/src/main.py) to resolve potential polling conflicts and clear backlogs.
+2. **Migrated to Netdata API**: Replaced shell command executions in [base.py](file:///home/ging/prog/hetzner-manager/bot/src/bot/handlers/base.py) with asynchronous local HTTP requests to the Netdata API. CPU, RAM, Disk, and Load metrics are now pulled directly from Netdata.
+3. **Implemented Telegram Alerting**: Created a background monitoring task in [alerts.py](file:///home/ging/prog/hetzner-manager/bot/src/bot/alerts.py) that polls `/api/v1/alarms?active` every 30 seconds and dispatches new alerts and resolution messages directly to whitelisted administrators.
+4. **Added Project Architecture Documentation**: Created [project_architecture.md](file:///home/ging/prog/hetzner-manager/notes/project_architecture.md) detailing directory mappings, metrics flow, user security permissions, and the deployment model.

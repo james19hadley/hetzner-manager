@@ -1,6 +1,8 @@
 import os
 import asyncio
 import logging
+import json
+import urllib.request
 from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
@@ -23,6 +25,109 @@ async def run_shell(cmd: str) -> str:
     except Exception as e:
         return f"Exception: {str(e)}"
 
+async def get_netdata_json(endpoint: str) -> dict:
+    url = f"http://localhost:19999/api/v1/{endpoint}"
+    def _fetch():
+        req = urllib.request.Request(url, headers={'User-Agent': 'HetznerManagerBot/1.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            return json.loads(response.read().decode())
+    return await asyncio.to_thread(_fetch)
+
+async def get_cpu_usage() -> str:
+    try:
+        data = await get_netdata_json("data?chart=system.cpu&after=-10&points=1&group=average")
+        if data and "data" in data and len(data["data"]) > 0:
+            labels = data["labels"]
+            values = data["data"][0]
+            metrics_dict = dict(zip(labels, values))
+            busy_sum = sum(metrics_dict[k] for k in metrics_dict if k != "time" and metrics_dict[k] is not None)
+            return f"{busy_sum:.1f}%"
+    except Exception as e:
+        logger.error(f"Error fetching CPU from Netdata: {e}")
+    return "Unknown"
+
+async def get_ram_usage() -> str:
+    try:
+        data = await get_netdata_json("data?chart=system.ram&after=-10&points=1&group=average")
+        if data and "data" in data and len(data["data"]) > 0:
+            labels = data["labels"]
+            values = data["data"][0]
+            ram_dict = dict(zip(labels, values))
+            used = ram_dict.get("used", 0) or 0
+            free = ram_dict.get("free", 0) or 0
+            cached = ram_dict.get("cached", 0) or 0
+            buffers = ram_dict.get("buffers", 0) or 0
+            
+            total = used + free + cached + buffers
+            if total > 0:
+                used_pct = (used / total) * 100
+                return f"{used:.0f} MB / {total:.0f} MB ({used_pct:.1f}%)"
+    except Exception as e:
+        logger.error(f"Error fetching RAM from Netdata: {e}")
+    return "Unknown"
+
+async def get_disk_usage() -> str:
+    try:
+        data = await get_netdata_json("data?chart=disk_space./&after=-10&points=1&group=average")
+        if data and "data" in data and len(data["data"]) > 0:
+            labels = data["labels"]
+            values = data["data"][0]
+            disk_dict = dict(zip(labels, values))
+            used = disk_dict.get("used", 0) or 0
+            avail = disk_dict.get("avail", 0) or 0
+            reserved = disk_dict.get("reserved for root", 0) or 0
+            
+            total = used + avail + reserved
+            if total > 0:
+                used_pct = (used / total) * 100
+                return f"{used:.1f} GB / {total:.1f} GB ({used_pct:.1f}%)"
+    except Exception as e:
+        logger.error(f"Error fetching Disk from Netdata: {e}")
+    return "Unknown"
+
+async def get_load_average() -> str:
+    try:
+        data = await get_netdata_json("data?chart=system.load&after=-10&points=1&group=average")
+        if data and "data" in data and len(data["data"]) > 0:
+            labels = data["labels"]
+            values = data["data"][0]
+            load_dict = dict(zip(labels, values))
+            l1 = load_dict.get("load1", 0)
+            l5 = load_dict.get("load5", 0)
+            l15 = load_dict.get("load15", 0)
+            return f"{l1:.2f}, {l5:.2f}, {l15:.2f}"
+    except Exception as e:
+        logger.error(f"Error fetching load average from Netdata: {e}")
+    return "Unknown"
+
+async def get_system_info() -> dict:
+    try:
+        info = await get_netdata_json("info")
+        uptime_sec = info.get("uptime", 0)
+        days = int(uptime_sec // 86400)
+        hours = int((uptime_sec % 86400) // 3600)
+        minutes = int((uptime_sec % 3600) // 60)
+        uptime_parts = []
+        if days > 0:
+            uptime_parts.append(f"{days}d")
+        if hours > 0:
+            uptime_parts.append(f"{hours}h")
+        uptime_parts.append(f"{minutes}m")
+        uptime = " ".join(uptime_parts) if uptime_parts else "0m"
+        
+        return {
+            "uptime": uptime,
+            "os_name": info.get("os_name", "Unknown"),
+            "os_version": info.get("os_version", "Unknown")
+        }
+    except Exception as e:
+        logger.error(f"Error fetching system info from Netdata: {e}")
+        return {
+            "uptime": "Unknown",
+            "os_name": "Unknown",
+            "os_version": "Unknown"
+        }
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, db_user: dict):
     welcome_text = (
@@ -44,22 +149,17 @@ async def cmd_start(message: Message, db_user: dict):
 async def cmd_sysinfo(message: Message):
     status_msg = await message.answer("📊 Считываю метрики системы...")
     
-    # Gather system info
-    uptime = await run_shell("uptime -p")
-    loadavg = await run_shell("cat /proc/loadavg | awk '{print $1 \", \" $2 \", \" $3}'")
-    
-    cpu_idle = await run_shell("top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/'")
-    try:
-        cpu_busy = f"{100 - float(cpu_idle):.1f}%"
-    except ValueError:
-        cpu_busy = "Unknown"
-        
-    ram = await run_shell("free -m | awk 'NR==2{printf \"%s MB / %s MB (%.1f%%)\", $3, $2, $3*100/$2}'")
-    disk = await run_shell("df -h / | awk 'NR==2{printf \"%s / %s (%s)\", $3, $2, $5}'")
+    # Gather system info via Netdata API
+    sys_info = await get_system_info()
+    loadavg = await get_load_average()
+    cpu_busy = await get_cpu_usage()
+    ram = await get_ram_usage()
+    disk = await get_disk_usage()
     
     lines = [
-        "🖥️ *Текущие показатели сервера Hetzner*:\n",
-        f"• *Uptime*: `{uptime}`",
+        "🖥️ *Текущие показатели сервера Hetzner* (через Netdata API):\n",
+        f"• *OS*: `{sys_info['os_name']} {sys_info['os_version']}`",
+        f"• *Uptime*: `{sys_info['uptime']}`",
         f"• *Load Average*: `{loadavg}`",
         f"• *Загрузка CPU*: `{cpu_busy}`",
         f"• *Использование RAM*: `{ram}`",
