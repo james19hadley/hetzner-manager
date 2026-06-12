@@ -5,3 +5,14 @@
 venv/
 __pycache__/
 *.pyc
+
+# Exclude server setup and admin files not part of the bot
+notes/
+scripts/
+configs/
+deploy.sh
+SERVER_ARCHITECTURE.md
+BOT_HANDOVER.md
+
+# Exclude SQLite databases
+bot/data/
