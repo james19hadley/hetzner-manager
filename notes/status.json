@@ -12,7 +12,7 @@
   "next_action": "Simulate high server load to test real alarm triggers.",
   "next_deadline": "2026-06-01",
   "next_deadline_description": "First deliverable",
-  "sync_needed": true,
-  "last_synchronized": "2026-06-06T11:58:54Z",
+  "sync_needed": false,
+  "last_synchronized": "2026-06-08T12:10:32Z",
   "sync_to_sheets": false
 }
