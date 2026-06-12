@@ -58,7 +58,7 @@ ssh root@$VPS_IP "
   chown -R tg-monitor:tg-monitor $TARGET_DIR
   
   # Install sudoers rule for tg-monitor
-  echo 'tg-monitor ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ag2r.service, /usr/bin/systemctl restart antigravity-gui.service, /usr/bin/systemctl restart xvfb.service, /usr/bin/systemctl restart hetzner-bot.service' > /etc/sudoers.d/tg-monitor
+  echo 'tg-monitor ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/tg-monitor
   chmod 0440 /etc/sudoers.d/tg-monitor
   
   # Install Systemd Service for Bot

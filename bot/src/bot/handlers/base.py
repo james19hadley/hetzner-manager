@@ -250,3 +250,222 @@ async def cmd_restart_container(message: Message):
         await status_msg.edit_text(f"✅ Контейнер `{container_name}` успешно перезапущен!")
     else:
         await status_msg.edit_text(f"❌ Ошибка перезапуска контейнера:\n`{res}`")
+
+# --- System Management & Accounts ---
+
+from src.bot.session import get_session
+
+@router.message(Command("sysusers"))
+async def cmd_sysusers(message: Message):
+    try:
+        gid_to_name = {}
+        user_to_groups = {}
+        with open("/etc/group", "r") as f:
+            for line in f:
+                parts = line.strip().split(":")
+                if len(parts) >= 4:
+                    gname = parts[0]
+                    gid = int(parts[2])
+                    gid_to_name[gid] = gname
+                    members = parts[3].split(",") if parts[3] else []
+                    for m in members:
+                        if m:
+                            user_to_groups.setdefault(m, []).append(gname)
+        
+        lines = ["👤 *Пользователи системы Hetzner*:\n"]
+        with open("/etc/passwd", "r") as f:
+            for line in f:
+                parts = line.strip().split(":")
+                if len(parts) >= 7:
+                    uname = parts[0]
+                    uid = int(parts[2])
+                    gid = int(parts[3])
+                    home = parts[5]
+                    shell = parts[6]
+                    
+                    # Filter system accounts to display only relevant ones
+                    if uid >= 1000 or uname in ['root', 'ag2r', 'antigravity', 'tg-monitor', 'netdata']:
+                        p_group = gid_to_name.get(gid, str(gid))
+                        sec_groups = user_to_groups.get(uname, [])
+                        all_groups = sorted(list(set([p_group] + sec_groups)))
+                        
+                        lines.append(
+                            f"• *{uname}* (UID: `{uid}`, GID: `{gid}`)\n"
+                            f"  🏠 Home: `{home}`\n"
+                            f"  🐚 Shell: `{shell}`\n"
+                            f"  👥 Groups: `{', '.join(all_groups)}`\n"
+                        )
+        await message.answer("\n".join(lines), parse_mode="Markdown")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка получения списка пользователей: `{e}`")
+
+@router.message(Command("sysgroups"))
+async def cmd_sysgroups(message: Message):
+    try:
+        lines = ["👥 *Группы системы Hetzner (несистемные и служебные)*:\n"]
+        with open("/etc/group", "r") as f:
+            for line in f:
+                parts = line.strip().split(":")
+                if len(parts) >= 4:
+                    gname = parts[0]
+                    gid = int(parts[2])
+                    members = parts[3].strip()
+                    
+                    if gid >= 1000 or members or gname in ['root', 'docker', 'sudo', 'msmtp', 'tg-monitor', 'ag2r', 'antigravity']:
+                        member_str = f" Members: `{members}`" if members else " _(No members)_"
+                        lines.append(f"• *{gname}* (GID: `{gid}`):{member_str}")
+        await message.answer("\n".join(lines), parse_mode="Markdown")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка получения списка групп: `{e}`")
+
+@router.message(Command("syssudoers"))
+async def cmd_syssudoers(message: Message):
+    status_msg = await message.answer("🔑 Читаю конфигурацию sudoers...")
+    res = await run_shell("sudo ls -la /etc/sudoers.d")
+    lines = [
+        "🔑 *Файлы sudoers в `/etc/sudoers.d/`*:\n",
+        f"<pre>{res}</pre>\n",
+        "📄 *Содержимое `/etc/sudoers.d/tg-monitor`*:"
+    ]
+    content = await run_shell("sudo cat /etc/sudoers.d/tg-monitor")
+    lines.append(f"<pre>{content}</pre>")
+    await status_msg.edit_text("\n".join(lines), parse_mode="HTML")
+
+@router.message(Command("syschmod"))
+async def cmd_syschmod(message: Message):
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("⚠️ Использование: `/syschmod <права> <путь>`\nПример: `/syschmod 755 /var/www`")
+        return
+    mode = args[1]
+    path = args[2]
+    
+    status_msg = await message.answer(f"⚙️ Выполняю `sudo chmod {mode} {path}`...")
+    res = await run_shell(f"sudo chmod {mode} {path}")
+    if not res:
+        await status_msg.edit_text(f"✅ Права на `{path}` успешно изменены на `{mode}`!")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка выполнения chmod:\n`{res}`")
+
+@router.message(Command("syschown"))
+async def cmd_syschown(message: Message):
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("⚠️ Использование: `/syschown <владелец:группа> <путь>`\nПример: `/syschown root:docker /var/run/docker.sock`")
+        return
+    owner_group = args[1]
+    path = args[2]
+    
+    status_msg = await message.answer(f"⚙️ Выполняю `sudo chown {owner_group} {path}`...")
+    res = await run_shell(f"sudo chown {owner_group} {path}")
+    if not res:
+        await status_msg.edit_text(f"✅ Владелец `{path}` успешно изменен на `{owner_group}`!")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка выполнения chown:\n`{res}`")
+
+@router.message(Command("sysusermod"))
+async def cmd_sysusermod(message: Message):
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("⚠️ Использование: `/sysusermod <аргументы>`\nПример: `/sysusermod -aG docker tg-monitor`")
+        return
+    user_args = args[1]
+    status_msg = await message.answer(f"⚙️ Выполняю `sudo usermod {user_args}`...")
+    res = await run_shell(f"sudo usermod {user_args}")
+    if not res:
+        await status_msg.edit_text("✅ Пользователь успешно изменен!")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка выполнения usermod:\n`{res}`")
+
+@router.message(Command("sysuseradd"))
+async def cmd_sysuseradd(message: Message):
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("⚠️ Использование: `/sysuseradd <аргументы_и_имя>`\nПример: `/sysuseradd -m -s /bin/bash testuser`")
+        return
+    user_args = args[1]
+    status_msg = await message.answer(f"⚙️ Выполняю `sudo useradd {user_args}`...")
+    res = await run_shell(f"sudo useradd {user_args}")
+    if not res:
+        await status_msg.edit_text("✅ Пользователь успешно добавлен!")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка выполнения useradd:\n`{res}`")
+
+@router.message(Command("sysuserdel"))
+async def cmd_sysuserdel(message: Message):
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("⚠️ Использование: `/sysuserdel <имя_пользователя>`\nПример: `/sysuserdel testuser`")
+        return
+    username = args[1]
+    status_msg = await message.answer(f"⚙️ Выполняю `sudo userdel -r {username}`...")
+    res = await run_shell(f"sudo userdel -r {username}")
+    if not res:
+        await status_msg.edit_text(f"✅ Пользователь `{username}` успешно удален!")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка выполнения userdel:\n`{res}`")
+
+# --- Stateful Shell Session Management ---
+
+@router.message(Command("su"))
+async def cmd_su(message: Message):
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("⚠️ Использование: `/su <имя_пользователя>`\nПример: `/su root`")
+        return
+    username = args[1].strip()
+    
+    # Verify if user exists by running whoami as that user
+    res = await run_shell(f"sudo -u {username} whoami")
+    if username in res or "tg-monitor" in res or "root" in res:
+        session = get_session(message.from_user.id)
+        session["user"] = username
+        await message.answer(f"👤 Пользователь сессии переключен на: `{username}`\nТеперь команды `$` выполняются от его имени.")
+    else:
+        await message.answer(f"❌ Не удалось войти под пользователем `{username}` (возможно, его нет в системе или нет прав):\n`{res}`")
+
+@router.message(Command("sh_status"))
+async def cmd_sh_status(message: Message):
+    session = get_session(message.from_user.id)
+    status_text = (
+        f"💻 *Текущий статус сессии шелла*:\n\n"
+        f"• *Пользователь*: `{session['user']}`\n"
+        f"• *Директория (CWD)*: `{session['cwd']}`\n"
+        f"• *Интерактивный режим*: `{'Включен 🟢' if session['interactive'] else 'Выключен 🔴'}`\n"
+        f"• *Переменные окружения*: `{session['env']}`"
+    )
+    await message.answer(status_text, parse_mode="Markdown")
+
+@router.message(Command("sh"))
+async def cmd_sh(message: Message):
+    args = message.text.split(maxsplit=1)
+    session = get_session(message.from_user.id)
+    
+    if len(args) >= 2:
+        # Execute one-off command statefully
+        cmd = args[1].strip()
+        from src.bot.handlers.message import run_command_async
+        status_msg = await message.reply("⏳ Выполняю...")
+        result = await run_command_async(
+            cmd,
+            username=session["user"],
+            cwd=session["cwd"],
+            env=session["env"]
+        )
+        await status_msg.edit_text(result, parse_mode="HTML")
+    else:
+        # Enter interactive mode
+        session["interactive"] = True
+        welcome = (
+            f"🟢 *Интерактивный режим шелла активирован!*\n\n"
+            f"Все ваши последующие текстовые сообщения (без знака `/` в начале) будут выполняться как терминальные команды.\n"
+            f"Для выхода введите команду `/sh_exit`.\n\n"
+            f"`[{session['user']}@{session['cwd']}]$`"
+        )
+        await message.answer(welcome, parse_mode="Markdown")
+
+@router.message(Command("sh_exit"))
+async def cmd_sh_exit(message: Message):
+    session = get_session(message.from_user.id)
+    session["interactive"] = False
+    await message.answer("🔴 Интерактивный режим шелла выключен.")

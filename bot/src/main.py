@@ -58,7 +58,13 @@ async def main():
         BotCommand(command="daemons", description="Статус системных служб (Systemd)"),
         BotCommand(command="docker", description="Статус Docker-контейнеров"),
         BotCommand(command="restart_daemon", description="Перезапустить службу: /restart_daemon <имя>"),
-        BotCommand(command="restart_container", description="Перезапустить контейнер: /restart_container <имя>")
+        BotCommand(command="restart_container", description="Перезапустить контейнер: /restart_container <имя>"),
+        BotCommand(command="sysusers", description="Список пользователей системы"),
+        BotCommand(command="sysgroups", description="Список групп системы"),
+        BotCommand(command="syssudoers", description="Список прав sudoers"),
+        BotCommand(command="sh_status", description="Статус текущей сессии шелла"),
+        BotCommand(command="su", description="Сменить пользователя сессии: /su <имя>"),
+        BotCommand(command="sh", description="Выполнить команду или войти в интерактивный шелл")
     ]
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
     logger.info("Bot commands registered.")

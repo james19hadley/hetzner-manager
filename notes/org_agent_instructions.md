@@ -79,6 +79,23 @@ You MUST update it whenever anything changes (milestones completed, priority ste
 
 ---
 
+## 📬 Agent Mail Client (Nexus Messaging)
+
+To coordinate with other agents or the Master Agent, check and send messages using the mailing client script at [nexus/mail_client.py](file:///home/ging/Documents/stud/nexus/mail_client.py).
+
+### Your Mail Address
+`project:<project_folder_name>/agent:<your_role>`
+
+### Procedures:
+1. **On startup / turn start**: Check if `notes/mail_flag.txt` exists. If yes, read your messages:
+   `python3 ~/Documents/stud/nexus/mail_client.py read --agent project:<project_folder_name>/agent:<your_role>`
+   Address the message request, write any needed replies, and mark the message read:
+   `python3 ~/Documents/stud/nexus/mail_client.py mark-read --agent project:<project_folder_name>/agent:<your_role> --msg-id <msg_id>`
+2. **Sending outbound requests**:
+   `python3 ~/Documents/stud/nexus/mail_client.py send --to <recipient_address> --from-address project:<project_folder_name>/agent:<your_role> --subject "<subject>" --body "<body>"`
+
+---
+
 ## 💬 Communication Style
 - Keep responses concise and focused.
 - End your turn with a brief summary of completed steps.
