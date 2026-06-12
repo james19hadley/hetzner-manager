@@ -46,3 +46,15 @@ This file acts as a chronological developer journal and laboratory notebook. Rec
 3. **Implemented Telegram Alerting**: Created a background monitoring task in [alerts.py](file:///home/ging/prog/hetzner-manager/bot/src/bot/alerts.py) that polls `/api/v1/alarms?active` every 30 seconds and dispatches new alerts and resolution messages directly to whitelisted administrators.
 4. **Added Project Architecture Documentation**: Created [project_architecture.md](file:///home/ging/prog/hetzner-manager/notes/project_architecture.md) detailing directory mappings, metrics flow, user security permissions, and the deployment model.
 5. **Implemented Google OAuth Login for Antigravity**: Added `/agy_login` and `/agy_callback <url>` commands to interact with the AG2R local server API over HTTPS. Created an automatic localhost callback URL interceptor in [message.py](file:///home/ging/prog/hetzner-manager/bot/src/bot/handlers/message.py) to automatically register auth tokens when the user pastes a Google Auth callback URL directly into the bot.
+
+---
+
+## 2026-06-12: Implement AG2R Direct Access Links & Login Shortcuts
+**Author**: Agent
+
+### Progress Summary
+1. **Implemented Dynamic AG2R .env Parsing**: Created `get_ag2r_env_val(key, default)` in [base.py](file:///home/ging/prog/hetzner-manager/bot/src/bot/handlers/base.py) to read configuration parameters dynamically from `/opt/ag2r/.env`.
+2. **Added Direct Authenticated Access Links**: Implemented `/agy_link` (and aliases `/link`, `/get_link`) which retrieves the host secure Tailscale IP (via `tailscale ip -4`) and `TUNNEL_URL` and appends `?key=<APP_PASSWORD>` so users can login to the AG2R remote dashboard from any device in one click.
+3. **Added Text Login Shortcuts**: Added a plain-text message interceptor in [message.py](file:///home/ging/prog/hetzner-manager/bot/src/bot/handlers/message.py) to catch exact case-insensitive matches for `"login"` or `"логин"` and forward them directly to trigger the Google login flow.
+4. **Enhanced Commands & Help**: Registered the new commands in [main.py](file:///home/ging/prog/hetzner-manager/bot/src/main.py) and added `/agy_link` documentation to the help/welcome text in `base.py`.
+5. **Deployed & Verified**: Successfully deployed changes to the Hetzner VPS using `./deploy.sh` and pushed all codebase modifications to `origin/main`.
