@@ -5,7 +5,7 @@ import json
 import urllib.request
 from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -137,6 +137,12 @@ async def cmd_start(message: Message, db_user: dict):
         f"• /sysinfo — CPU, RAM, Uptime, Load Avg, Диск (через Netdata API)\n"
         f"• /daemons — Статус системных служб Systemd\n"
         f"• /docker — Статус Docker-контейнеров на хосте\n\n"
+        f"🤖 *Управление Antigravity*:\n"
+        f"• /agy_status — Состояние служб, CDP-сессии и скриншот виртуального экрана\n"
+        f"• /agy_restart — Перезапуск Antigravity Electron GUI\n"
+        f"• /agy_sleep — Остановка Antigravity GUI (режим сна)\n"
+        f"• /agy_wakeup — Запуск Antigravity GUI (пробуждение)\n"
+        f"• /agy_logs — Последние логи Antigravity GUI и AG2R\n\n"
         f"⚙️ *Управление службами*:\n"
         f"• `/restart_daemon <имя>` — Безопасный перезапуск службы\n"
         f"• `/restart_container <имя>` — Перезапуск Docker-контейнера\n\n"
@@ -200,6 +206,109 @@ async def cmd_daemons(message: Message):
         lines.append(f"{icon} *{s_name}* ({desc}): `{state}`")
         
     await status_msg.edit_text("\n".join(lines), parse_mode="Markdown")
+
+@router.message(Command("agy_status"))
+async def cmd_agy_status(message: Message):
+    status_msg = await message.answer("🔍 Опрашиваю состояние Antigravity на сервере...")
+    
+    services = {
+        "xvfb": "Virtual Display Xvfb",
+        "antigravity-gui": "Antigravity GUI (Electron)",
+        "ag2r": "AG2R Remote Client UI"
+    }
+    
+    status_lines = ["🛡️ *Статус Antigravity служб (Systemd)*:\n"]
+    for s_name, desc in services.items():
+        state = await run_shell(f"systemctl is-active {s_name}.service")
+        icon = "🟢" if state == "active" else "🔴"
+        status_lines.append(f"{icon} *{s_name}* ({desc}): `{state}`")
+    
+    status_lines.append("\n🤖 *Состояние CDP (Порт 9000)*:")
+    try:
+        def _fetch_cdp():
+            req = urllib.request.Request("http://localhost:9000/json", headers={'User-Agent': 'HetznerManagerBot/1.0'})
+            with urllib.request.urlopen(req, timeout=3) as response:
+                return json.loads(response.read().decode())
+        cdp_data = await asyncio.to_thread(_fetch_cdp)
+        if cdp_data:
+            status_lines.append("🟢 CDP Активен. Обнаруженные контексты:")
+            for item in cdp_data:
+                title = item.get("title", "Без названия")
+                url = item.get("url", "Без URL")
+                status_lines.append(f"  • `{title}`: `{url}`")
+        else:
+            status_lines.append("🟡 CDP запущен, но контексты пусты.")
+    except Exception as e:
+        status_lines.append(f"🔴 Недоступен: `{e}`")
+        
+    await status_msg.edit_text("\n".join(status_lines), parse_mode="Markdown")
+    
+    xvfb_state = await run_shell("systemctl is-active xvfb.service")
+    if xvfb_state == "active":
+        screenshot_msg = await message.answer("📸 Делаю скриншот виртуального экрана...")
+        scrot_file = "/tmp/agy_telegram_screen.png"
+        
+        if os.path.exists(scrot_file):
+            try:
+                os.remove(scrot_file)
+            except Exception:
+                pass
+                
+        res = await run_shell(f"DISPLAY=:99 scrot {scrot_file}")
+        if os.path.exists(scrot_file) and os.path.getsize(scrot_file) > 0:
+            try:
+                photo = FSInputFile(scrot_file)
+                await message.reply_photo(photo, caption="📺 Текущий снимок экрана Antigravity (DISPLAY=:99)")
+                await screenshot_msg.delete()
+            except Exception as e:
+                await screenshot_msg.edit_text(f"❌ Ошибка отправки скриншота в Telegram: `{e}`")
+        else:
+            await screenshot_msg.edit_text(f"❌ Не удалось сделать скриншот:\n`{res}`")
+
+@router.message(Command("agy_restart"))
+async def cmd_agy_restart(message: Message):
+    status_msg = await message.answer("🔄 Выполняю безопасный перезапуск Antigravity GUI...")
+    res = await run_shell("sudo systemctl restart antigravity-gui.service")
+    if res == "" or "Error" not in res:
+        await status_msg.edit_text("✅ Служба `antigravity-gui.service` успешно перезапущена!")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка перезапуска службы:\n`{res}`")
+
+@router.message(Command("agy_sleep"))
+async def cmd_agy_sleep(message: Message):
+    status_msg = await message.answer("💤 Перевожу Antigravity в режим сна (остановка GUI)...")
+    res = await run_shell("sudo systemctl stop antigravity-gui.service")
+    if res == "" or "Error" not in res:
+        await status_msg.edit_text("✅ Служба `antigravity-gui.service` успешно остановлена (режим сна).")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка остановки службы:\n`{res}`")
+
+@router.message(Command("agy_wakeup"))
+async def cmd_agy_wakeup(message: Message):
+    status_msg = await message.answer("⏰ Пробуждаю Antigravity (запуск GUI)...")
+    res = await run_shell("sudo systemctl start antigravity-gui.service")
+    if res == "" or "Error" not in res:
+        await status_msg.edit_text("✅ Служба `antigravity-gui.service` успешно запущена (пробуждение).")
+    else:
+        await status_msg.edit_text(f"❌ Ошибка запуска службы:\n`{res}`")
+
+@router.message(Command("agy_logs"))
+async def cmd_agy_logs(message: Message):
+    status_msg = await message.answer("📋 Читаю логи служб...")
+    
+    gui_logs = await run_shell("journalctl -u antigravity-gui.service -n 15 --no-pager")
+    ag2r_logs = await run_shell("journalctl -u ag2r.service -n 15 --no-pager")
+    
+    response_text = (
+        "📋 *Логи Antigravity GUI* (последние 15 строк):\n"
+        f"```\n{gui_logs}\n```\n\n"
+        "📋 *Логи AG2R UI Server* (последние 15 строк):\n"
+        f"```\n{ag2r_logs}\n```"
+    )
+    if len(response_text) > 4000:
+        response_text = response_text[:3900] + "\n...[вывод усечен]"
+        
+    await status_msg.edit_text(response_text, parse_mode="Markdown")
 
 @router.message(Command("docker", "containers"))
 async def cmd_docker(message: Message):
