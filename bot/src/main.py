@@ -62,9 +62,15 @@ async def main():
         BotCommand(command="sysusers", description="Список пользователей системы"),
         BotCommand(command="sysgroups", description="Список групп системы"),
         BotCommand(command="syssudoers", description="Список прав sudoers"),
+        BotCommand(command="syschmod", description="Изменить права: /syschmod <права> <путь>"),
+        BotCommand(command="syschown", description="Изменить владельца: /syschown <пользователь:группа> <путь>"),
+        BotCommand(command="sysusermod", description="Изменить пользователя: /sysusermod <аргументы>"),
+        BotCommand(command="sysuseradd", description="Добавить пользователя: /sysuseradd <аргументы>"),
+        BotCommand(command="sysuserdel", description="Удалить пользователя: /sysuserdel <имя>"),
         BotCommand(command="sh_status", description="Статус текущей сессии шелла"),
         BotCommand(command="su", description="Сменить пользователя сессии: /su <имя>"),
-        BotCommand(command="sh", description="Выполнить команду или войти в интерактивный шелл")
+        BotCommand(command="sh", description="Выполнить команду или войти в интерактивный шелл"),
+        BotCommand(command="sh_exit", description="Выйти из интерактивного режима шелла")
     ]
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
     logger.info("Bot commands registered.")
