@@ -67,7 +67,65 @@ The bot follows the principle of least privilege:
    ADMIN_TELEGRAM_ID="your-telegram-id-here" # Automatically whitelisted on first startup
    ```
 
-### Installation
+### Installation & Deployment
+
+#### Option 1: Production Deployment (Systemd + Privilege Demotion)
+
+This is the recommended deployment method for production servers. It runs the bot under a dedicated low-privilege system user with restricted sudo permissions to interact with host daemons.
+
+1. **Create the `tg-monitor` System User**:
+   ```bash
+   sudo useradd -r -s /bin/false -U tg-monitor
+   sudo usermod -aG docker tg-monitor
+   ```
+
+2. **Configure Sudo Rules**:
+   Create `/etc/sudoers.d/tg-monitor` to allow passwordless user switching and service management:
+   ```bash
+   sudo bash -c "echo 'tg-monitor ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/tg-monitor"
+   sudo chmod 0440 /etc/sudoers.d/tg-monitor
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   cd /opt/hetzner-manager
+   sudo python3 -m venv bot/.venv
+   sudo bot/.venv/bin/pip install --upgrade pip
+   sudo bot/.venv/bin/pip install -r bot/requirements.txt
+   sudo chown -R tg-monitor:tg-monitor /opt/hetzner-manager
+   ```
+
+4. **Install and Start the Systemd Service**:
+   Create the systemd unit file at `/etc/systemd/system/hetzner-bot.service`:
+   ```ini
+   [Unit]
+   Description=Hetzner Manager Telegram Bot
+   After=network.target
+
+   [Service]
+   User=tg-monitor
+   Group=tg-monitor
+   WorkingDirectory=/opt/hetzner-manager/bot
+   ExecStart=/opt/hetzner-manager/bot/.venv/bin/python3 -m src.main
+   Restart=always
+   RestartSec=5
+   StandardOutput=journal
+   StandardError=journal
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+   Enable and start the service:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable hetzner-bot.service
+   sudo systemctl start hetzner-bot.service
+   ```
+
+#### Option 2: Local Development (Manual Run)
+
+For debugging or development purposes, you can run the bot manually:
+
 1. Initialize a Python virtual environment:
    ```bash
    python3 -m venv bot/.venv
