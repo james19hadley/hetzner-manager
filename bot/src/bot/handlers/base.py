@@ -143,7 +143,9 @@ async def cmd_start(message: Message, db_user: dict):
         f"• `/agy_restart` — Перезапуск Antigravity Electron GUI\n"
         f"• `/agy_sleep` — Остановка Antigravity GUI (режим сна)\n"
         f"• `/agy_wakeup` — Запуск Antigravity GUI (пробуждение)\n"
-        f"• `/agy_logs` — Последние логи Antigravity GUI и AG2R\n\n"
+        f"• `/agy_logs` — Последние логи Antigravity GUI и AG2R\n"
+        f"• `/agy_login` — Инициировать авторизацию Google в Antigravity\n"
+        f"• `/agy_callback <url>` — Завершить вход отправкой callback-ссылки\n\n"
         f"⚙️ *Управление службами*:\n"
         f"• `/restart_daemon <имя>` — Безопасный перезапуск службы\n"
         f"• `/restart_container <имя>` — Перезапуск Docker-контейнера\n\n"
@@ -593,3 +595,110 @@ async def cmd_sh_exit(message: Message):
     session = get_session(message.from_user.id)
     session["interactive"] = False
     await message.answer("🔴 Интерактивный режим шелла выключен.")
+
+# --- AG2R Integration Helpers & Handlers ---
+import ssl
+
+def get_ag2r_password() -> str:
+    try:
+        with open("/opt/ag2r/.env", "r") as f:
+            for line in f:
+                if line.startswith("APP_PASSWORD="):
+                    return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return "antigravity"
+
+async def ag2r_login_and_get_cookie() -> str:
+    password = get_ag2r_password()
+    url = "https://localhost:3000/login"
+    data = json.dumps({"password": password}).encode("utf-8")
+    
+    def _fetch():
+        ctx = ssl._create_unverified_context()
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "HetznerManagerBot/1.0"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, context=ctx, timeout=5) as response:
+            headers = response.info()
+            cookies = headers.get_all("Set-Cookie")
+            if cookies:
+                for cookie in cookies:
+                    if "ag2r_token=" in cookie:
+                        return cookie.split(";", 1)[0]
+            return None
+            
+    return await asyncio.to_thread(_fetch)
+
+async def ag2r_post_authenticated(endpoint: str, payload: dict) -> dict:
+    cookie = await ag2r_login_and_get_cookie()
+    if not cookie:
+        raise Exception("Failed to authenticate with AG2R server")
+        
+    url = f"https://localhost:3000/{endpoint}"
+    data = json.dumps(payload).encode("utf-8")
+    
+    def _fetch():
+        ctx = ssl._create_unverified_context()
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "HetznerManagerBot/1.0",
+                "Cookie": cookie
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
+            return json.loads(response.read().decode())
+            
+    return await asyncio.to_thread(_fetch)
+
+@router.message(Command("agy_login"))
+async def cmd_agy_login(message: Message):
+    status_msg = await message.answer("🔑 Инициализирую вход Google в Antigravity...")
+    try:
+        res = await ag2r_post_authenticated("auth/signin", {})
+        if res.get("ok"):
+            google_url = res.get("googleUrl")
+            if google_url:
+                await status_msg.edit_text(
+                    f"🔗 *Ссылка для авторизации Google*:\n\n"
+                    f"[Войти в Google Account]({google_url})\n\n"
+                    f"1. Перейдите по ссылке и войдите в аккаунт.\n"
+                    f"2. После успешного входа страница перенаправит вас на нерабочий адрес `http://localhost:X/...`.\n"
+                    f"3. Скопируйте эту итоговую localhost-ссылку и отправьте её боту (или используйте `/agy_callback <ссылка>`).",
+                    parse_mode="Markdown",
+                    disable_web_page_preview=True
+                )
+            else:
+                await status_msg.edit_text("✅ Antigravity уже авторизован в системе!")
+        else:
+            await status_msg.edit_text(f"❌ Не удалось получить ссылку: `{res.get('reason', 'unknown error')}`")
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Ошибка вызова API Antigravity:\n`{str(e)}`")
+
+@router.message(Command("agy_callback"))
+async def cmd_agy_callback(message: Message):
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("⚠️ Использование: `/agy_callback <localhost_ссылка>`")
+        return
+    callback_url = args[1].strip()
+    
+    status_msg = await message.answer("⚙️ Передаю callback-ссылку в Antigravity...")
+    try:
+        res = await ag2r_post_authenticated("auth/callback-proxy", {"url": callback_url})
+        if res.get("ok"):
+            await status_msg.edit_text("✅ Авторизация успешно выполнена! Проверьте `/agy_status`.")
+        else:
+            await status_msg.edit_text(f"❌ Ошибка обработки ссылки: `{res.get('error', 'unknown error')}`")
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Ошибка вызова API Antigravity:\n`{str(e)}`")

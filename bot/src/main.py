@@ -67,6 +67,8 @@ async def main():
         BotCommand(command="sysusermod", description="Изменить пользователя: /sysusermod <аргументы>"),
         BotCommand(command="sysuseradd", description="Добавить пользователя: /sysuseradd <аргументы>"),
         BotCommand(command="sysuserdel", description="Удалить пользователя: /sysuserdel <имя>"),
+        BotCommand(command="agy_login", description="Инициировать вход Google в Antigravity"),
+        BotCommand(command="agy_callback", description="Завершить вход отправкой callback-ссылки"),
         BotCommand(command="sh_status", description="Статус текущей сессии шелла"),
         BotCommand(command="su", description="Сменить пользователя сессии: /su <имя>"),
         BotCommand(command="sh", description="Выполнить команду или войти в интерактивный шелл"),

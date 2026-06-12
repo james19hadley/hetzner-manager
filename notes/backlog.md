@@ -46,6 +46,7 @@ This file tracks overall goals, milestones, and task checklists for the project.
 - [x] **Task 2.5**: Integrate Telegram bot directly with Netdata API for status metrics.
 - [x] **Task 2.6**: Add background alert monitor task in Telegram bot.
 - [x] **Task 2.7**: Document project architecture.
+- [x] **Task 2.8**: Add Google OAuth login flow integration for Antigravity.
 
 ### Phase 3: Reporting & Submission
 - [ ] **Task 3.1**: Draft the report/paper.

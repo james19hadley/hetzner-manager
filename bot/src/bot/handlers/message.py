@@ -123,6 +123,20 @@ async def handle_text_message(message: Message, db_user: dict):
     if text.startswith("/"):
         return
         
+    # Intercept Google Auth callback URL (starts with http://localhost or http://127.0.0.1 and contains auth/callback)
+    if ("localhost:" in text or "127.0.0.1:" in text) and "auth/callback" in text:
+        status_msg = await message.reply("⚙️ Обнаружена ссылка авторизации. Передаю в Antigravity...")
+        try:
+            from src.bot.handlers.base import ag2r_post_authenticated
+            res = await ag2r_post_authenticated("auth/callback-proxy", {"url": text})
+            if res.get("ok"):
+                await status_msg.edit_text("✅ Ссылка авторизации успешно передана! Antigravity авторизован в Google.")
+            else:
+                await status_msg.edit_text(f"❌ Сервер отклонил ссылку: `{res.get('error', 'unknown error')}`")
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Ошибка отправки ссылки авторизации:\n`{str(e)}`")
+        return
+        
     session = get_session(message.from_user.id)
     is_cmd = text.startswith("$")
     
